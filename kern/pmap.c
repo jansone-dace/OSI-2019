@@ -377,7 +377,33 @@ pte_t *
 pgdir_walk(pde_t *pgdir, const void *va, int create)
 {
 	// Fill this function in
-	return NULL;
+	uintptr_t pdx = PDX(va); // page directory index
+	uintptr_t ptx = PTX(va); // page table index
+
+	struct PageInfo * page;
+	pte_t * pte;
+
+	// Page table doesn't exist yet
+	if (!pgdir[pdx]) {
+		if (create == 0) // Don't create new page table
+			return NULL;
+		else { // Create new page table
+			page = page_alloc(1);
+			if (!page) // allocation failed
+				return NULL;
+
+			page->pp_ref++;
+			pgdir[pdx] = page2pa(page) | PTE_W | PTE_P | PTE_U;
+			
+			// return pointer into new page table
+			pte = KADDR(page2pa(page));
+			return pte + ptx;
+		}
+	}
+
+	// return pointer from existing page table
+	pte = KADDR(PTE_ADDR(pgdir[pdx]));
+	return pte + ptx;
 }
 
 //
@@ -394,6 +420,12 @@ static void
 boot_map_region(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int perm)
 {
 	// Fill this function in
+	pte_t * pte;
+	uint32_t i;
+	for (i = 0; i < size; i += PGSIZE) {
+		pte = pgdir_walk(pgdir, (void*)(va + i), 1);
+		*pte = (pa + i) | perm | PTE_P;
+	}
 }
 
 //
@@ -425,6 +457,25 @@ int
 page_insert(pde_t *pgdir, struct PageInfo *pp, void *va, int perm)
 {
 	// Fill this function in
+	pte_t * pte = pgdir_walk(pgdir, va, 1);
+	if (pte == NULL)
+		return -E_NO_MEM;
+
+	// Increment pp->pp_ref before page_remove 
+	// That way if the same page is re-inserted, pp->pp_ref will be decremented
+	// for it in page_remove function (for corner-case)
+	pp->pp_ref++;
+
+	if (*pte)
+		page_remove(pgdir, va);
+
+	// Get physical address of the page for mapping at virtual address
+	physaddr_t phys_addr = page2pa(pp);
+	*pte = phys_addr | perm | PTE_P;
+
+	// The TLB must be invalidated if a page was formerly present at 'va'.
+	tlb_invalidate(pgdir, va);
+
 	return 0;
 }
 
@@ -443,7 +494,20 @@ struct PageInfo *
 page_lookup(pde_t *pgdir, void *va, pte_t **pte_store)
 {
 	// Fill this function in
-	return NULL;
+	pte_t * pte = pgdir_walk(pgdir, va, 0);
+	if (!pte)
+		return NULL;
+
+	// Get page from pte physical address
+	physaddr_t phys_addr = PTE_ADDR(*pte);
+	struct PageInfo * page_info = pa2page(phys_addr);
+
+	// If pte_store is not zero, then we store in it the address of the pte for this page
+	if (pte_store)
+		*pte_store = pte;
+	
+	// Return the page	
+	return page_info;
 }
 
 //
@@ -465,6 +529,23 @@ void
 page_remove(pde_t *pgdir, void *va)
 {
 	// Fill this function in
+	pte_t * page_store;
+	struct PageInfo * page = page_lookup(pgdir, va, &page_store);
+
+	// if no page, then do nothing and return
+	if (!page)
+		return;
+
+	// Decrement the reference count
+	// Page will be freed by page_decref if ref count is 0
+	page_decref(page);
+
+
+	// The TLB must be invalidated if you remove an entry from the page table.
+	tlb_invalidate(pgdir, va);
+
+	// The pg table entry corresponding to 'va' should be set to 0. (if such a PTE exists)
+	*page_store = 0;
 }
 
 //
