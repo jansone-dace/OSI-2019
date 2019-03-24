@@ -77,7 +77,7 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 	};
 
 	cprintf("Stack backtrace:\n");
-	while (p[0] > KSTACKTOP) {
+	while (p[0]) {
 		cprintf("\tebp %08x eip %08x args %08x %08x %08x %08x %08x\n",
 			p[0], p[1], p[2], p[3], p[4], p[5]);
 

@@ -608,7 +608,25 @@ int
 user_mem_check(struct Env *env, const void *va, size_t len, int perm)
 {
 	// LAB 3: Your code here.
+	void * start = (void *)ROUNDDOWN((uint32_t)va, PGSIZE);
+	void * end = (void *)ROUNDUP((uint32_t)va + len, PGSIZE);
+	void * i;
+	for (i = start; i < end; i += PGSIZE) {
+		// (1) If the address is below ULIM, user program can access the address
+		if (PDX(i) > PDX(ULIM)) {
+			user_mem_check_addr = (uintptr_t)(i > va ? i : va);			
+			return -E_FAULT;
+		}
 
+		// (2) Check if page table gives permission
+		pte_t * pte = pgdir_walk(env->env_pgdir, i, 0);
+		if (pte == NULL || (*pte & (perm | PTE_P)) <= 0) {
+			user_mem_check_addr = (uintptr_t)(i > va ? i : va);			
+			return -E_FAULT;
+		}
+	}
+
+	// If we have gotten to here, then everything is ok
 	return 0;
 }
 
