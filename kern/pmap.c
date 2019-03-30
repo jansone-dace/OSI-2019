@@ -336,7 +336,8 @@ page_init(void)
 		//	|| (page2pa(&pages[i]) >= EXTPHYSMEM && (char *)page2kva(&pages[i]) < first_free_page
 		// It always is continus area, so it can be simplified
 		// to have less comparision operations
-		if (page2pa(&pages[i]) >= IOPHYSMEM && (char *)page2kva(&pages[i]) < first_free_page) {
+		if ((page2pa(&pages[i]) >= IOPHYSMEM && (char *)page2kva(&pages[i]) < first_free_page)
+		|| page2pa(&pages[i]) == MPENTRY_PADDR) {
 			pages[i].pp_ref = 1;
 		}
 		else { // all the other pages are free
@@ -650,7 +651,16 @@ mmio_map_region(physaddr_t pa, size_t size)
 	// Hint: The staff solution uses boot_map_region.
 	//
 	// Your code here:
-	panic("mmio_map_region not implemented");
+	//panic("mmio_map_region not implemented");
+	size_t roundup_size = ROUNDUP(size, PGSIZE);
+	if (roundup_size > (MMIOLIM - MMIOBASE))
+		panic("Reservation would overflow MMIOLIM");
+	boot_map_region(kern_pgdir, base, roundup_size, pa, PTE_W|PTE_PCD|PTE_PWT);
+
+	void * result = &base;
+	base += roundup_size;
+
+	return result;
 }
 
 static uintptr_t user_mem_check_addr;
