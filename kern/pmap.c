@@ -277,7 +277,14 @@ mem_init_mp(void)
 	//     Permissions: kernel RW, user NONE
 	//
 	// LAB 4: Your code here:
-
+	uint64_t kstacktop_i;
+	size_t size;
+	int i;
+	for (i = 0; i < NCPU; i++) {
+		kstacktop_i = KSTACKTOP - i * (KSTKSIZE + KSTKGAP);
+		size = ROUNDUP(KSTKSIZE, PGSIZE);
+		boot_map_region(kern_pgdir, kstacktop_i - KSTKSIZE, size, PADDR(percpu_kstacks[i]), PTE_P | PTE_W);
+	}
 }
 
 // --------------------------------------------------------------
@@ -657,7 +664,7 @@ mmio_map_region(physaddr_t pa, size_t size)
 		panic("Reservation would overflow MMIOLIM");
 	boot_map_region(kern_pgdir, base, roundup_size, pa, PTE_W|PTE_PCD|PTE_PWT);
 
-	void * result = &base;
+	void * result = (void *)base;
 	base += roundup_size;
 
 	return result;
