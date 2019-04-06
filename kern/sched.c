@@ -29,6 +29,29 @@ sched_yield(void)
 	// below to halt the cpu.
 
 	// LAB 4: Your code here.
+	// if no current environment, then current is first in envs array
+	if (curenv)
+		idle = curenv;
+	else
+		idle = &envs[0];
+
+	int n = NENV; // element count in envs array
+	int i = ENVX(idle->env_id); // start index - current environment
+
+	while (n--) {
+		if (envs[i % NENV].env_status == ENV_RUNNABLE) {
+			env_run(&envs[i % NENV]);
+			break;
+		}
+		i++;
+	}
+
+	// if we didn't find any runnable environment 
+	// and the current environment is still running
+	// then continue to run it
+	if (idle->env_status == ENV_RUNNING) {
+		env_run(idle);
+	}
 
 	// sched_halt never returns
 	sched_halt();
