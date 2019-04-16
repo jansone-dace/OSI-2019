@@ -373,13 +373,13 @@ page_fault_handler(struct Trapframe *tf)
 	if (curenv->env_pgfault_upcall != NULL) {
 		uintptr_t exception_stack_top;		
 		if (tf->tf_esp >= UXSTACKTOP-PGSIZE && tf->tf_esp <= UXSTACKTOP-1)
-			// Exception stack is empty, so utf will be below UXSTACKTOP
-			exception_stack_top = UXSTACKTOP;
-		else
 			// There is somthing on exception stack -> need to insert empty 32-bit word between stack records
-			exception_stack_top = tf->tf_esp - 4;
+			exception_stack_top = tf->tf_esp - 4 - sizeof(struct UTrapframe);
+		else
+			// Exception stack is empty, so utf will be below UXSTACKTOP
+			exception_stack_top = UXSTACKTOP - sizeof(struct UTrapframe);
 
-		struct UTrapframe *utf = (struct UTrapframe *)(exception_stack_top - sizeof(struct UTrapframe));
+		struct UTrapframe *utf = (struct UTrapframe *)exception_stack_top;
 
 		// Check whether it is possible to write to exception stack
 		user_mem_assert(curenv, utf, sizeof(struct UTrapframe), PTE_W);
@@ -393,7 +393,7 @@ page_fault_handler(struct Trapframe *tf)
 		utf->utf_eflags = tf->tf_eflags;
 		utf->utf_esp = tf->tf_esp;
 
-		curenv->env_tf.tf_esp = (uintptr_t)utf;
+		curenv->env_tf.tf_esp = (uintptr_t)exception_stack_top;
 		// branch to curenv->env_pgfault_upcall
 		curenv->env_tf.tf_eip = (uintptr_t)curenv->env_pgfault_upcall;
 		env_run(curenv);
