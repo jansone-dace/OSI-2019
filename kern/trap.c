@@ -85,6 +85,12 @@ void ALIGN();
 void MCHK();
 void SIMDERR();
 void SYSCALL();
+void TIMER();
+void KBD();
+void SERIAL();
+void SPURIOUS();
+void IDE();
+void ERROR();
 
 
 void
@@ -115,6 +121,15 @@ trap_init(void)
 	SETGATE(idt[T_SIMDERR], 0, GD_KT, SIMDERR, 0);
 
 	SETGATE(idt[T_SYSCALL], 1, GD_KT, SYSCALL, 3);
+
+
+	// Hardware IRQs
+	SETGATE(idt[IRQ_OFFSET + IRQ_TIMER], 0, GD_KT, TIMER, 0);
+	SETGATE(idt[IRQ_OFFSET + IRQ_KBD], 0, GD_KT, KBD, 0);
+	SETGATE(idt[IRQ_OFFSET + IRQ_SERIAL], 0, GD_KT, SERIAL, 0);
+	SETGATE(idt[IRQ_OFFSET + IRQ_SPURIOUS], 0, GD_KT, SPURIOUS, 0);
+	SETGATE(idt[IRQ_OFFSET + IRQ_IDE], 0, GD_KT, IDE, 0);
+	SETGATE(idt[IRQ_OFFSET + IRQ_ERROR], 0, GD_KT, ERROR, 0);
 
 	// Per-CPU setup 
 	trap_init_percpu();
