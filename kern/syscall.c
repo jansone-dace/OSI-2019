@@ -375,7 +375,57 @@ static int
 sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
 {
 	// LAB 4: Your code here.
-	panic("sys_ipc_try_send not implemented");
+	//panic("sys_ipc_try_send not implemented");
+	struct Env * e;
+	struct PageInfo * page;
+	int r;
+	pte_t * pte_store;
+
+	//  environment envid doesn't currently exist.
+	if ((r = envid2env(envid, &e, 0)) < 0)
+		return -E_BAD_ENV;
+
+	// envid is not currently blocked in sys_ipc_recv, 
+	// or another environment managed to send first.
+	if (e->env_ipc_recving == 0)
+		return -E_IPC_NOT_RECV;
+
+	// srcva < UTOP but srcva is not page-aligned.
+	if ((uintptr_t)srcva < UTOP && (uintptr_t)srcva % PGSIZE != 0) 
+		return -E_INVAL;
+
+	// srcva < UTOP and perm is inappropriate
+	if ((uintptr_t)srcva < UTOP && (perm | PTE_SYSCALL) != PTE_SYSCALL)
+		return -E_INVAL;
+
+	// srcva < UTOP but srcva is not mapped in the caller's address space.
+	page = page_lookup(e->env_pgdir, srcva, &pte_store);
+	if ((uintptr_t)srcva < UTOP && page == NULL)
+		return -E_INVAL;
+
+
+	// (perm & PTE_W), but srcva is read-only in the current environment's address space.
+	if ((perm & PTE_W) && !(*pte_store & PTE_W))
+		return -E_INVAL;
+
+	// If srcva < UTOP, then also send page currently mapped at 'srcva'
+	if ((uintptr_t)srcva < UTOP) {
+		// there's not enough memory to map srcva in envid's address space.
+		if ((r = page_insert(e->env_pgdir, page, e->env_ipc_dstva, perm)) < 0)
+			return -E_NO_MEM;
+		e->env_ipc_perm = perm;
+	}
+	else {
+		e->env_ipc_perm = 0;
+	}
+
+	
+	e->env_ipc_recving = 0;
+	e->env_ipc_from = envid;
+	e->env_ipc_value = curenv->env_id;	
+	e->env_status = ENV_RUNNABLE;
+
+	return 0;
 }
 
 // Block until a value is ready.  Record that you want to receive
@@ -393,7 +443,16 @@ static int
 sys_ipc_recv(void *dstva)
 {
 	// LAB 4: Your code here.
-	panic("sys_ipc_recv not implemented");
+	//panic("sys_ipc_recv not implemented");
+
+	if ((uintptr_t)dstva < UTOP && (uintptr_t)dstva % PGSIZE != 0)
+		return -E_INVAL;
+
+	curenv->env_ipc_recving = 1;
+	curenv->env_ipc_dstva = dstva;
+	curenv->env_status = ENV_NOT_RUNNABLE;
+	sys_yield();
+
 	return 0;
 }
 
